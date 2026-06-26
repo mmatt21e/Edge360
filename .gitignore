@@ -1,0 +1,42 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+
+# .NET
+*.user
+*.suo
+*.userprefs
+project.lock.json
+project.assets.json
+*.nuget.props
+*.nuget.targets
+.vs/
+.vscode/
+
+# Rider / IDE
+.idea/
+*.DotSettings.user
+
+# Test results
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+coverage/
+
+# Environment / secrets
+.env
+*.env.local
+appsettings.*.local.json
+secrets.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log

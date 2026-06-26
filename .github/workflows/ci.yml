@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore Edge360.sln
+
+      - name: Build
+        run: dotnet build Edge360.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Edge360.sln --configuration Release --no-build --verbosity normal
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -f docker/Dockerfile -t edge360-api:ci .

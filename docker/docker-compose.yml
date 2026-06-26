@@ -1,0 +1,49 @@
+name: edge360
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-edge360}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-edge360}
+      POSTGRES_DB: ${POSTGRES_DB:-edge360}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-edge360}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-edge360};Username=${POSTGRES_USER:-edge360};Password=${POSTGRES_PASSWORD:-edge360}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:-CHANGE_ME_DEV_ONLY_signing_key_minimum_32_chars}"
+      Jwt__Issuer: "edge360"
+      Jwt__Audience: "edge360-clients"
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
