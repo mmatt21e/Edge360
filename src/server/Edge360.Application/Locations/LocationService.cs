@@ -4,6 +4,7 @@ using Edge360.Application.Common.Models;
 using Edge360.Application.Events.Dtos;
 using Edge360.Application.Geofencing;
 using Edge360.Application.Locations.Dtos;
+using Edge360.Application.Notifications;
 using Edge360.Domain.Entities;
 using Edge360.Domain.Enums;
 using Edge360.Domain.ValueObjects;
@@ -20,12 +21,17 @@ public sealed class LocationService
     private readonly IAppDbContext _db;
     private readonly GroupAccess _access;
     private readonly IRealtimeNotifier _notifier;
+    private readonly INotificationDispatcher _dispatcher;
+    private readonly NotificationOptions _notificationOptions;
 
-    public LocationService(IAppDbContext db, GroupAccess access, IRealtimeNotifier notifier)
+    public LocationService(IAppDbContext db, GroupAccess access, IRealtimeNotifier notifier,
+        INotificationDispatcher dispatcher, NotificationOptions notificationOptions)
     {
         _db = db;
         _access = access;
         _notifier = notifier;
+        _dispatcher = dispatcher;
+        _notificationOptions = notificationOptions;
     }
 
     public async Task<LocationDto> RecordAsync(Guid userId, RecordLocationRequest request, CancellationToken ct = default)
@@ -60,6 +66,7 @@ public sealed class LocationService
             {
                 device.LastSeenAt = point.RecordedAt;
                 device.BatteryLevel = request.BatteryLevel ?? device.BatteryLevel;
+                device.OfflineNotified = false; // it's online again
             }
         }
 
@@ -76,6 +83,12 @@ public sealed class LocationService
         var current = point.ToCoordinate();
         var previousCoord = previous is null ? (GeoCoordinate?)null : previous.ToCoordinate();
 
+        // Low battery is raised once, when the level crosses below the threshold.
+        var threshold = _notificationOptions.LowBatteryThresholdPercent;
+        var lowBatteryCrossed = point.BatteryLevel is { } level
+            && level <= threshold
+            && (previous?.BatteryLevel ?? 101) > threshold;
+
         foreach (var membership in memberships)
         {
             if (!membership.IsSharingActive)
@@ -83,6 +96,10 @@ public sealed class LocationService
 
             await _notifier.LocationUpdatedAsync(membership.GroupId, dto, ct);
             await EvaluateGeofencesAsync(membership.GroupId, userId, user.DisplayName, previousCoord, current, ct);
+
+            if (lowBatteryCrossed)
+                await RaiseEventAsync(membership.GroupId, userId, EventType.LowBattery, EventSeverity.Warning,
+                    $"{user.DisplayName}'s battery is low ({point.BatteryLevel}%).", current, ct);
         }
 
         return dto;
@@ -102,22 +119,32 @@ public sealed class LocationService
             var type = hit.Transition == PlaceTransition.Entered ? EventType.Arrival : EventType.Departure;
             var verb = hit.Transition == PlaceTransition.Entered ? "arrived at" : "left";
 
-            var safetyEvent = new SafetyEvent
-            {
-                GroupId = groupId,
-                SubjectUserId = userId,
-                Type = type,
-                Severity = EventSeverity.Info,
-                Message = $"{displayName} {verb} {hit.Place.Name}.",
-                PlaceId = hit.Place.Id,
-                Latitude = current.Latitude,
-                Longitude = current.Longitude
-            };
-            _db.Events.Add(safetyEvent);
-            await _db.SaveChangesAsync(ct);
-
-            await _notifier.EventRaisedAsync(groupId, ToEventDto(safetyEvent), ct);
+            await RaiseEventAsync(groupId, userId, type, EventSeverity.Info,
+                $"{displayName} {verb} {hit.Place.Name}.", current, ct, hit.Place.Id);
         }
+    }
+
+    /// <summary>Persists a safety event, pushes it in real time, and dispatches notifications.</summary>
+    private async Task RaiseEventAsync(
+        Guid groupId, Guid userId, EventType type, EventSeverity severity, string message,
+        GeoCoordinate location, CancellationToken ct, Guid? placeId = null)
+    {
+        var safetyEvent = new SafetyEvent
+        {
+            GroupId = groupId,
+            SubjectUserId = userId,
+            Type = type,
+            Severity = severity,
+            Message = message,
+            PlaceId = placeId,
+            Latitude = location.Latitude,
+            Longitude = location.Longitude
+        };
+        _db.Events.Add(safetyEvent);
+        await _db.SaveChangesAsync(ct);
+
+        await _notifier.EventRaisedAsync(groupId, ToEventDto(safetyEvent), ct);
+        await _dispatcher.DispatchEventAsync(safetyEvent.Id, ct);
     }
 
     public async Task<IReadOnlyList<LocationDto>> GetLatestAsync(Guid userId, Guid groupId, CancellationToken ct = default)

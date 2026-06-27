@@ -1,6 +1,8 @@
 using Edge360.Application.Common.Abstractions;
+using Edge360.Application.Notifications;
 using Edge360.Infrastructure.Auditing;
 using Edge360.Infrastructure.Identity;
+using Edge360.Infrastructure.Notifications;
 using Edge360.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -26,6 +28,17 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddScoped<IAuditWriter, AuditWriter>();
+
+        // Notification options + channels (the dispatcher consumes all enabled channels).
+        services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        services.Configure<WebhookOptions>(configuration.GetSection(WebhookOptions.SectionName));
+        services.Configure<LoggingChannelOptions>(configuration.GetSection(LoggingChannelOptions.SectionName));
+
+        services.AddSingleton<INotificationChannel, LoggingNotificationChannel>();
+        services.AddSingleton<INotificationChannel, SmtpEmailNotificationChannel>();
+        services.AddHttpClient<WebhookNotificationChannel>();
+        services.AddTransient<INotificationChannel>(sp => sp.GetRequiredService<WebhookNotificationChannel>());
 
         return services;
     }

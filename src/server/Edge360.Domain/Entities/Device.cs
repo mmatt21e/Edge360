@@ -20,5 +20,8 @@ public class Device : Entity
     public int? BatteryLevel { get; set; }
     public DateTimeOffset? LastSeenAt { get; set; }
 
+    /// <summary>True once an offline alert has been raised; reset when the device is seen again.</summary>
+    public bool OfflineNotified { get; set; }
+
     public ICollection<LocationPoint> LocationPoints { get; set; } = new List<LocationPoint>();
 }

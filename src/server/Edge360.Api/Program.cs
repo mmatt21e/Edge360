@@ -74,6 +74,11 @@ builder.Services.AddControllers(options => options.Filters.Add<ValidationFilter>
 // --- Real-time ---
 builder.Services.AddSignalR();
 
+// --- Background jobs ---
+// The offline-device monitor scans the DB on a timer; skip it under integration tests.
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<Edge360.Api.Notifications.OfflineDeviceMonitor>();
+
 // --- Health checks ---
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 

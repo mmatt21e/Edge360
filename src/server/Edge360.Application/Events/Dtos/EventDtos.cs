@@ -23,3 +23,15 @@ public sealed record EventQuery(
     Guid GroupId,
     int Page = 1,
     int PageSize = 50);
+
+/// <summary>A notification delivery record for the current user.</summary>
+public sealed record AlertDto(
+    Guid Id,
+    Guid EventId,
+    string EventType,
+    string Severity,
+    string Message,
+    string Channel,
+    bool Delivered,
+    string? FailureReason,
+    DateTimeOffset OccurredAt);

@@ -77,3 +77,40 @@ public sealed class NullAuditWriter : IAuditWriter
     public Task WriteAsync(string action, Guid? actorUserId = null, string? targetType = null,
         string? targetId = null, string? metadata = null, CancellationToken ct = default) => Task.CompletedTask;
 }
+
+/// <summary>No-op notification dispatcher that records which event ids were dispatched.</summary>
+public sealed class RecordingDispatcher : Edge360.Application.Notifications.INotificationDispatcher
+{
+    public List<Guid> Dispatched { get; } = new();
+
+    public Task DispatchEventAsync(Guid eventId, CancellationToken ct = default)
+    {
+        Dispatched.Add(eventId);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Configurable in-memory notification channel for dispatcher tests.</summary>
+public sealed class FakeChannel : Edge360.Application.Notifications.INotificationChannel
+{
+    private readonly Func<Edge360.Application.Notifications.NotificationMessage, Edge360.Application.Notifications.NotificationResult> _behavior;
+
+    public FakeChannel(string name, bool enabled,
+        Func<Edge360.Application.Notifications.NotificationMessage, Edge360.Application.Notifications.NotificationResult>? behavior = null)
+    {
+        Name = name;
+        IsEnabled = enabled;
+        _behavior = behavior ?? (_ => Edge360.Application.Notifications.NotificationResult.Sent());
+    }
+
+    public string Name { get; }
+    public bool IsEnabled { get; }
+    public List<Edge360.Application.Notifications.NotificationMessage> Sent { get; } = new();
+
+    public Task<Edge360.Application.Notifications.NotificationResult> SendAsync(
+        Edge360.Application.Notifications.NotificationMessage message, CancellationToken ct = default)
+    {
+        Sent.Add(message);
+        return Task.FromResult(_behavior(message));
+    }
+}

@@ -46,6 +46,17 @@ Dependencies point inward; the Domain has no outward dependencies.
   queries. Cross-user reads are gated by `GroupAccess.RequireCanViewAsync` (shared-group check).
 - Thresholds live in `DrivingThresholds` (config section `Driving`).
 
+### Notifications
+- `NotificationDispatcher` (Application) resolves recipients for a `SafetyEvent` (SOS → all other
+  members; everything else → Guardians/Admins), then fans the message out to every enabled
+  `INotificationChannel`, recording an `Alert` per (recipient, channel) with the delivery outcome.
+- Channels (Infrastructure): `LoggingNotificationChannel` (default), `SmtpEmailNotificationChannel`
+  (enabled when SMTP is configured), `WebhookNotificationChannel` (HTTP POST "push"). A channel may
+  *skip* a message (e.g. no email address) — no Alert is recorded for skips.
+- Triggers: SOS (`EventService`), arrival/departure + low-battery (`LocationService` on ingest),
+  and offline-device — the `OfflineDeviceMonitor` `BackgroundService` flags devices unseen past a
+  window (one-shot via `Device.OfflineNotified`, reset when the device reports again).
+
 ### Authentication
 - Passwords hashed with PBKDF2 (HMAC-SHA256, 100k iterations), stored as `iter.salt.hash`.
 - Login/refresh issue a short-lived JWT plus an opaque refresh token (stored **hashed**).

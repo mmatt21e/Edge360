@@ -5,6 +5,7 @@ using Edge360.Application.Events;
 using Edge360.Application.Geofencing;
 using Edge360.Application.Groups;
 using Edge360.Application.Locations;
+using Edge360.Application.Notifications;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -27,6 +28,10 @@ public static class DependencyInjection
         services.AddSingleton(sp => sp.GetService<IOptions<DrivingThresholds>>()?.Value ?? new DrivingThresholds());
         services.AddScoped<DrivingAnalyzer>();
         services.AddScoped<DrivingService>();
+
+        // Notifications. Channels are registered by the infrastructure layer.
+        services.AddSingleton(sp => sp.GetService<IOptions<NotificationOptions>>()?.Value ?? new NotificationOptions());
+        services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 
         services.AddValidatorsFromAssemblyContaining<AuthService>(ServiceLifetime.Scoped);
 

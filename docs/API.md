@@ -76,6 +76,17 @@ Creates alert records for other group members.
 `eventDto`: `{ id, groupId, subjectUserId, type, severity, message, placeId, latitude, longitude, occurredAt, acknowledged }`
 `type` ∈ { Arrival, Departure, Sos, LowBattery, OfflineDevice, Speeding, CrashSuspected }
 
+## Notifications  *(auth required)*
+
+Safety events (SOS, arrival, departure, low battery, offline device) are delivered to recipients
+over every enabled channel (logging, email, webhook/push); each attempt is recorded as an alert.
+
+### GET /api/notifications?page=1&pageSize=50
+→ `200 { items: [ alertDto ], page, pageSize, totalCount }` — the caller's alerts, newest first.
+
+`alertDto`: `{ id, eventId, eventType, severity, message, channel, delivered, failureReason, occurredAt }`
+`channel` ∈ { log, email, push }. SOS reaches all other members; other types reach Guardians/Admins.
+
 ## Driving intelligence  *(auth required)*
 
 ### POST /api/driving/analyze

@@ -31,7 +31,8 @@ public class LocationServiceTests : IDisposable
         }
 
         var ctx = _factory.Create();
-        return new LocationService(ctx, new GroupAccess(ctx), _notifier);
+        return new LocationService(ctx, new GroupAccess(ctx), _notifier,
+            new RecordingDispatcher(), new Edge360.Application.Notifications.NotificationOptions());
     }
 
     [Fact]
@@ -79,6 +80,22 @@ public class LocationServiceTests : IDisposable
 
         latest.Should().ContainSingle();
         latest[0].Latitude.Should().Be(40.5);
+    }
+
+    [Fact]
+    public async Task Record_BatteryCrossesThreshold_RaisesSingleLowBatteryEvent()
+    {
+        var sut = CreateSut(out var userId, out _);
+        var t = DateTimeOffset.UtcNow.AddMinutes(-10);
+
+        await sut.RecordAsync(userId, new RecordLocationRequest(41.0, -74.0, BatteryLevel: 80, RecordedAt: t));
+        await sut.RecordAsync(userId, new RecordLocationRequest(41.0, -74.0, BatteryLevel: 10, RecordedAt: t.AddMinutes(1)));
+        await sut.RecordAsync(userId, new RecordLocationRequest(41.0, -74.0, BatteryLevel: 8, RecordedAt: t.AddMinutes(2)));
+
+        await using var verify = _factory.Create();
+        var lowBattery = await verify.Events.Where(e => e.Type == EventType.LowBattery).ToListAsync();
+        lowBattery.Should().ContainSingle(); // raised once on crossing, debounced after
+        lowBattery[0].Severity.Should().Be(EventSeverity.Warning);
     }
 
     public void Dispose() => _factory.Dispose();

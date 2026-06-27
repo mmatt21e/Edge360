@@ -6,9 +6,9 @@ historical tracking. This repository currently contains the **production-grade b
 foundation** — the API spine that the web dashboard and mobile apps build on.
 
 > Status: Backend complete (auth, groups, location, geofencing + events, SOS, real-time,
-> driving intelligence) **plus a Blazor WebAssembly web dashboard** (live map, members,
-> activity feed, SOS, places, driving). Docker, CI, tests included. Mobile apps are on the
-> roadmap below.
+> driving intelligence, **multi-channel notifications**) plus a Blazor WebAssembly web dashboard
+> (live map, members, activity feed, SOS, places, driving). Docker, CI, tests included. Mobile
+> apps are on the roadmap below.
 
 ## Tech stack
 
@@ -97,8 +97,8 @@ export Jwt__SigningKey="a-long-random-secret-at-least-32-characters"
 dotnet test Edge360.sln
 ```
 
-50 tests covering domain logic, application services (incl. the driving analyzer), and
-end-to-end HTTP flows.
+57 tests covering domain logic, application services (incl. the driving analyzer and
+notification dispatcher), and end-to-end HTTP flows.
 
 ## Database migrations
 
@@ -145,6 +145,24 @@ dotnet run --project src/web/Edge360.Web   # serves the SPA; configure API URL i
 The map library is vendored under `wwwroot/lib/leaflet` (no CDN dependency); map tiles default to
 OpenStreetMap and can be pointed at a self-hosted tile server.
 
+## Notifications
+
+Safety events fan out to recipients across pluggable channels. Triggers: **SOS** (all members),
+**arrival/departure**, **low battery** (raised on ingest when the level crosses the threshold),
+and **offline device** (a background monitor flags devices that stop reporting) — these reach
+group Guardians/Admins. Each delivery is recorded as an `Alert` with its outcome; a user reads
+their own at `GET /api/notifications`.
+
+Channels (each enabled when configured, all implementing `INotificationChannel`):
+
+| Channel | Config section | Notes |
+|---------|----------------|-------|
+| Logging | `LoggingNotifications` | On by default; structured-log + audit trail |
+| Email   | `Email` (SMTP)         | Enabled when `Email:Host` is set |
+| Push    | `Webhook`              | HTTP POST to a webhook (ntfy/Gotify/custom); enabled when `Webhook:Url` is set |
+
+Tunables live under `Notifications` (low-battery threshold, offline window, scan interval).
+
 ## Driving intelligence
 
 Trips are reconstructed from the location stream and scored. `POST /api/driving/analyze` rebuilds
@@ -155,8 +173,8 @@ section. See [docs/API.md](docs/API.md#driving-intelligence-auth-required).
 
 ## Roadmap (not yet implemented)
 
-- Push / email notification transports (alert records + `IRealtimeNotifier` abstraction exist)
 - .NET MAUI mobile apps (Android/iOS) with battery-aware background tracking
+- Admin console (user/group oversight, retention policy, audit browser)
 - Redis SignalR backplane for horizontal scale
 - Admin console (user/group oversight, retention policy, audit browser)
 
