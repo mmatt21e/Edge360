@@ -42,5 +42,28 @@ public readonly record struct GeoCoordinate
     /// <summary>True when <paramref name="other"/> lies within <paramref name="radiusMeters"/> of this point.</summary>
     public bool IsWithin(GeoCoordinate other, double radiusMeters) => DistanceTo(other) <= radiusMeters;
 
+    /// <summary>
+    /// Initial bearing (forward azimuth) from this point to <paramref name="other"/>, in degrees [0, 360).
+    /// </summary>
+    public double InitialBearingTo(GeoCoordinate other)
+    {
+        var lat1 = ToRadians(Latitude);
+        var lat2 = ToRadians(other.Latitude);
+        var dLon = ToRadians(other.Longitude - Longitude);
+
+        var y = Math.Sin(dLon) * Math.Cos(lat2);
+        var x = Math.Cos(lat1) * Math.Sin(lat2) - Math.Sin(lat1) * Math.Cos(lat2) * Math.Cos(dLon);
+        var bearing = Math.Atan2(y, x) * 180d / Math.PI;
+
+        return (bearing + 360d) % 360d;
+    }
+
+    /// <summary>Smallest signed difference between two compass headings, in degrees [-180, 180].</summary>
+    public static double HeadingDelta(double fromDegrees, double toDegrees)
+    {
+        var delta = (toDegrees - fromDegrees + 540d) % 360d - 180d;
+        return delta;
+    }
+
     private static double ToRadians(double degrees) => degrees * Math.PI / 180d;
 }

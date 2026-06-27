@@ -1,4 +1,5 @@
 using Edge360.Application.Auth.Dtos;
+using Edge360.Application.Driving.Dtos;
 using Edge360.Application.Events.Dtos;
 using Edge360.Application.Geofencing.Dtos;
 using Edge360.Application.Groups.Dtos;
@@ -76,6 +77,16 @@ public sealed class UpdatePlaceRequestValidator : AbstractValidator<UpdatePlaceR
         RuleFor(x => x.Latitude).InclusiveBetween(-90, 90);
         RuleFor(x => x.Longitude).InclusiveBetween(-180, 180);
         RuleFor(x => x.RadiusMeters).GreaterThan(0).LessThanOrEqualTo(100_000);
+    }
+}
+
+public sealed class AnalyzeDrivingRequestValidator : AbstractValidator<AnalyzeDrivingRequest>
+{
+    public AnalyzeDrivingRequestValidator()
+    {
+        RuleFor(x => x)
+            .Must(r => !(r.From.HasValue && r.To.HasValue) || r.From <= r.To)
+            .WithMessage("'From' must be on or before 'To'.");
     }
 }
 

@@ -38,6 +38,14 @@ Dependencies point inward; the Domain has no outward dependencies.
    group `Place` to detect Entered/Exited transitions.
 5. Transitions become `SafetyEvent`s (Arrival/Departure) and are pushed over the event hub.
 
+### Driving intelligence
+- `DrivingAnalyzer` (pure, in Application) reconstructs trips from a user's ordered location
+  stream: it splits on time gaps, derives per-point speed/heading when not reported, and detects
+  hard braking, harsh acceleration, harsh cornering, and speeding (debounced), then scores each
+  trip 0–100. `DrivingService` persists `Trip` + `DrivingEvent` records and serves trip/score
+  queries. Cross-user reads are gated by `GroupAccess.RequireCanViewAsync` (shared-group check).
+- Thresholds live in `DrivingThresholds` (config section `Driving`).
+
 ### Authentication
 - Passwords hashed with PBKDF2 (HMAC-SHA256, 100k iterations), stored as `iter.salt.hash`.
 - Login/refresh issue a short-lived JWT plus an opaque refresh token (stored **hashed**).

@@ -5,8 +5,8 @@ sharing, family groups, geofencing with arrival/departure alerts, safety (SOS) w
 historical tracking. This repository currently contains the **production-grade backend
 foundation** — the API spine that the web dashboard and mobile apps build on.
 
-> Status: Backend foundation complete (auth, groups, location, geofencing + events, SOS,
-> real-time, Docker, CI, tests). Web dashboard, mobile apps, and driving-intelligence are on the
+> Status: Backend complete (auth, groups, location, geofencing + events, SOS, real-time,
+> **driving intelligence**, Docker, CI, tests). Web dashboard and mobile apps are on the
 > roadmap below.
 
 ## Tech stack
@@ -89,7 +89,8 @@ export Jwt__SigningKey="a-long-random-secret-at-least-32-characters"
 dotnet test Edge360.sln
 ```
 
-36 tests covering domain logic, application services, and end-to-end HTTP flows.
+50 tests covering domain logic, application services (incl. the driving analyzer), and
+end-to-end HTTP flows.
 
 ## Database migrations
 
@@ -118,9 +119,16 @@ curl -s localhost:8080/api/auth/register -H 'Content-Type: application/json' \
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Driving intelligence
+
+Trips are reconstructed from the location stream and scored. `POST /api/driving/analyze` rebuilds
+trips for the caller; the engine (`DrivingAnalyzer`) detects hard braking, harsh acceleration,
+harsh cornering, and speeding, then computes a 0–100 score. Query trips, trip detail (with route),
+and an aggregate score via `/api/driving/*`. Thresholds are configurable under the `Driving`
+section. See [docs/API.md](docs/API.md#driving-intelligence-auth-required).
+
 ## Roadmap (not yet implemented)
 
-- Driving intelligence (trip detection, scoring, hard-braking) — abstractions in place
 - Push / email notification transports (alert records + `IRealtimeNotifier` abstraction exist)
 - Blazor web dashboard with live map
 - .NET MAUI mobile apps (Android/iOS) with battery-aware background tracking

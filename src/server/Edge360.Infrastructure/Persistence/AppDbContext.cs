@@ -20,6 +20,8 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<SafetyEvent> Events => Set<SafetyEvent>();
     public DbSet<Alert> Alerts => Set<Alert>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<Trip> Trips => Set<Trip>();
+    public DbSet<DrivingEvent> DrivingEvents => Set<DrivingEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

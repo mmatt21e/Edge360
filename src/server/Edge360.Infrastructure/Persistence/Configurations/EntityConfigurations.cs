@@ -121,6 +121,29 @@ public sealed class AlertConfiguration : IEntityTypeConfiguration<Alert>
     }
 }
 
+public sealed class TripConfiguration : IEntityTypeConfiguration<Trip>
+{
+    public void Configure(EntityTypeBuilder<Trip> b)
+    {
+        b.ToTable("trips");
+        b.HasKey(x => x.Id);
+        b.HasIndex(x => new { x.UserId, x.StartedAt });
+        b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.HasMany(x => x.Events).WithOne(e => e.Trip).HasForeignKey(e => e.TripId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class DrivingEventConfiguration : IEntityTypeConfiguration<DrivingEvent>
+{
+    public void Configure(EntityTypeBuilder<DrivingEvent> b)
+    {
+        b.ToTable("driving_events");
+        b.HasKey(x => x.Id);
+        b.HasIndex(x => new { x.UserId, x.OccurredAt });
+        b.HasIndex(x => x.TripId);
+    }
+}
+
 public sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
 {
     public void Configure(EntityTypeBuilder<AuditLog> b)

@@ -76,6 +76,28 @@ Creates alert records for other group members.
 `eventDto`: `{ id, groupId, subjectUserId, type, severity, message, placeId, latitude, longitude, occurredAt, acknowledged }`
 `type` ∈ { Arrival, Departure, Sos, LowBattery, OfflineDevice, Speeding, CrashSuspected }
 
+## Driving intelligence  *(auth required)*
+
+### POST /api/driving/analyze
+Body: `{ "from"?, "to"? }` → `200 { tripsCreated, trips: [ tripDto ] }`.
+Reconstructs and scores the caller's trips from stored location history in the range
+(replacing any previously-computed trips that start in that window).
+
+### GET /api/driving/trips?subjectUserId=&from=&to=&page=1&pageSize=50
+→ `200 { items: [ tripDto ], page, pageSize, totalCount }` (newest first).
+Omit `subjectUserId` for your own trips; supply it to view a member who shares a group with you
+(`403` otherwise).
+
+### GET /api/driving/trips/{tripId}
+→ `200 { trip: tripDto, events: [ drivingEventDto ], route: [[lat, lon], ...] }`.
+
+### GET /api/driving/score?subjectUserId=&from=&to=
+→ `200 { userId, tripCount, totalDistanceMeters, averageScore, hardBrakingCount, hardAccelerationCount, harshCorneringCount, speedingCount }`
+
+`tripDto`: `{ id, userId, startedAt, endedAt, distanceMeters, durationSeconds, maxSpeedMps, averageSpeedMps, hardBrakingCount, hardAccelerationCount, harshCorneringCount, speedingCount, score }`
+`drivingEventDto`: `{ id, type, occurredAt, latitude, longitude, magnitude }`
+`type` ∈ { HardBraking, HardAcceleration, HarshCornering, Speeding }. Score is 0–100 (100 = flawless).
+
 ## Real-time (SignalR)
 
 Connect with the access token via query string (`?access_token=...`):

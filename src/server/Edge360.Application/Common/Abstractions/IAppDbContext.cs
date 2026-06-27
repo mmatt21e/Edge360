@@ -19,6 +19,8 @@ public interface IAppDbContext
     DbSet<SafetyEvent> Events { get; }
     DbSet<Alert> Alerts { get; }
     DbSet<AuditLog> AuditLogs { get; }
+    DbSet<Trip> Trips { get; }
+    DbSet<DrivingEvent> DrivingEvents { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
