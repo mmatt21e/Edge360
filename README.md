@@ -6,7 +6,8 @@ historical tracking. This repository currently contains the **production-grade b
 foundation** — the API spine that the web dashboard and mobile apps build on.
 
 > Status: Backend complete (auth, groups, location, geofencing + events, SOS, real-time,
-> **driving intelligence**, Docker, CI, tests). Web dashboard and mobile apps are on the
+> driving intelligence) **plus a Blazor WebAssembly web dashboard** (live map, members,
+> activity feed, SOS, places, driving). Docker, CI, tests included. Mobile apps are on the
 > roadmap below.
 
 ## Tech stack
@@ -14,6 +15,7 @@ foundation** — the API spine that the web dashboard and mobile apps build on.
 | Concern        | Choice                                   |
 |----------------|------------------------------------------|
 | API            | ASP.NET Core 8 (Web API + controllers)   |
+| Web dashboard  | Blazor WebAssembly SPA + Leaflet map (vendored) |
 | Architecture   | Clean / layered (Domain/Application/Infrastructure/Api) |
 | Persistence    | PostgreSQL via EF Core 8 (Npgsql)        |
 | Real-time      | SignalR (`/hubs/location`, `/hubs/events`) |
@@ -32,6 +34,8 @@ src/server/
   Edge360.Application/     Use-case services, DTOs, abstractions, validators
   Edge360.Infrastructure/ EF Core DbContext, JWT, password hashing, auditing, migrations
   Edge360.Api/            Controllers, SignalR hubs, middleware, DI wiring, Program.cs
+src/web/
+  Edge360.Web/            Blazor WebAssembly dashboard (HTTP + SignalR client of the API)
 tests/
   Edge360.Domain.Tests/         Pure unit tests
   Edge360.Application.Tests/     Service tests (SQLite in-memory)
@@ -50,11 +54,15 @@ cd docker
 docker compose up --build
 ```
 
-This starts PostgreSQL, Redis, and the API. The API applies EF Core migrations automatically on
-startup. Once up:
+This starts PostgreSQL, Redis, the API, and the web dashboard. The API applies EF Core migrations
+automatically on startup. Once up:
 
-- Health check: http://localhost:8080/health
+- Web dashboard: http://localhost:8081
+- API health check: http://localhost:8080/health
 - Swagger UI (Development env): set `ASPNETCORE_ENVIRONMENT=Development` to expose it.
+
+The web container reads the browser-facing API URL from `API_BASE_URL` (default
+`http://localhost:8080`), injected into the published app at startup.
 
 ### Option B — dotnet CLI
 
@@ -119,6 +127,24 @@ curl -s localhost:8080/api/auth/register -H 'Content-Type: application/json' \
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Web dashboard
+
+A **Blazor WebAssembly** single-page app (`src/web/Edge360.Web`) that consumes the API over HTTP
+and subscribes to the SignalR hubs — the same way the mobile apps will. Features: email
+auth (login/register with JWT + silent refresh), group create/join and selection, a **live map**
+(Leaflet, vendored locally for self-hosting) showing members with real-time updates, an activity
+feed with live events and an **SOS** button, **places** management with click-to-place
+(role-gated to Guardians/Admins), and a **driving** page (trips, scores, route view).
+
+Run it standalone against a running API:
+
+```bash
+dotnet run --project src/web/Edge360.Web   # serves the SPA; configure API URL in wwwroot/appsettings.json
+```
+
+The map library is vendored under `wwwroot/lib/leaflet` (no CDN dependency); map tiles default to
+OpenStreetMap and can be pointed at a self-hosted tile server.
+
 ## Driving intelligence
 
 Trips are reconstructed from the location stream and scored. `POST /api/driving/analyze` rebuilds
@@ -130,7 +156,6 @@ section. See [docs/API.md](docs/API.md#driving-intelligence-auth-required).
 ## Roadmap (not yet implemented)
 
 - Push / email notification transports (alert records + `IRealtimeNotifier` abstraction exist)
-- Blazor web dashboard with live map
 - .NET MAUI mobile apps (Android/iOS) with battery-aware background tracking
 - Redis SignalR backplane for horizontal scale
 - Admin console (user/group oversight, retention policy, audit browser)

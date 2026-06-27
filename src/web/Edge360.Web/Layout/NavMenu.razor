@@ -1,0 +1,42 @@
+@inject AuthClient AuthClient
+@inject AppState AppState
+@inject NavigationManager Nav
+@implements IDisposable
+
+<nav class="sidebar">
+    <div class="brand">Edge<span>360</span></div>
+
+    <NavLink class="nav-link" href="dashboard"><span>🗺️</span> Dashboard</NavLink>
+    <NavLink class="nav-link" href="groups"><span>👪</span> Groups</NavLink>
+    <NavLink class="nav-link" href="places"><span>📍</span> Places</NavLink>
+    <NavLink class="nav-link" href="driving"><span>🚗</span> Driving</NavLink>
+
+    <div class="sidebar-footer">
+        @if (AppState.ActiveGroup is not null)
+        {
+            <div class="muted">Active group</div>
+            <div>@AppState.ActiveGroup.Name <span class="badge">@AppState.ActiveGroup.Role</span></div>
+        }
+        <AuthorizeView>
+            <Authorized>
+                <div style="margin-top:0.75rem;">
+                    <span class="muted">@context.User.Identity?.Name</span>
+                    <button class="btn btn-secondary btn-sm" style="margin-top:0.5rem;width:100%;" @onclick="Logout">Sign out</button>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+</nav>
+
+@code {
+    protected override void OnInitialized() => AppState.OnChange += StateHasChanged;
+
+    private async Task Logout()
+    {
+        await AuthClient.LogoutAsync();
+        AppState.Clear();
+        Nav.NavigateTo("/login", forceLoad: false);
+    }
+
+    public void Dispose() => AppState.OnChange -= StateHasChanged;
+}

@@ -45,5 +45,17 @@ services:
     ports:
       - "8080:8080"
 
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web/Dockerfile
+    depends_on:
+      - api
+    environment:
+      # Public URL the browser uses to reach the API.
+      API_BASE_URL: "${API_BASE_URL:-http://localhost:8080}"
+    ports:
+      - "8081:80"
+
 volumes:
   pgdata:

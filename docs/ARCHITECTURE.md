@@ -82,6 +82,22 @@ Dependencies point inward; the Domain has no outward dependencies.
   subscribed to a SignalR group per family group (`group:{id}`). Broadcasts target those groups.
 - Redis is provisioned in Compose and is the intended SignalR backplane for multi-instance scale.
 
+## Web dashboard (`src/web/Edge360.Web`)
+
+- **Blazor WebAssembly** SPA — a pure HTTP + SignalR client of the API (no server projects
+  referenced; it defines its own client DTOs). This keeps the web surface symmetric with how the
+  mobile apps will consume the API.
+- **Auth**: tokens persist in browser local storage (`TokenStore`); `JwtAuthStateProvider` decodes
+  the JWT into a `ClaimsPrincipal`; an `AuthHeaderHandler` `DelegatingHandler` attaches the bearer
+  token and transparently refreshes on a 401 before retrying.
+- **State**: `AppState` holds the loaded groups and active group (and exposes role-based flags such
+  as `CanManagePlaces`); `RealtimeService` manages the two hub connections and surfaces pushes as
+  C# events the pages subscribe to.
+- **Map**: `MapInterop` is the map-visualization abstraction (spec §10) over a small Leaflet JS
+  module (`wwwroot/js/map.js`); Leaflet is vendored locally so the app has no CDN dependency.
+- **Pages**: Login/Register, Groups, Dashboard (live map + members + activity + SOS), Places
+  (click-to-place, role-gated), Driving (trips/score/route). Protected routes redirect to login.
+
 ## Testing strategy
 
 - **Domain**: pure unit tests (geo math, transitions, invite codes, token state).

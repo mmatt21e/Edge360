@@ -1,0 +1,114 @@
+@page "/groups"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject AppState AppState
+
+<PageTitle>Groups · Edge360</PageTitle>
+<h1>Groups</h1>
+
+<div class="grid grid-2">
+    <div>
+        <div class="card">
+            <h3>Your groups</h3>
+            @if (_loading)
+            {
+                <p class="muted">Loading…</p>
+            }
+            else if (_groups.Count == 0)
+            {
+                <p class="muted">You're not in any groups yet. Create or join one.</p>
+            }
+            else
+            {
+                <ul class="list">
+                    @foreach (var g in _groups)
+                    {
+                        <li class="row">
+                            <div>
+                                <strong>@g.Name</strong> <span class="badge">@g.Role</span><br />
+                                <span class="muted">Invite code: @g.InviteCode · @g.MemberCount member(s)</span>
+                            </div>
+                            <span class="spacer"></span>
+                            @if (AppState.ActiveGroup?.Id == g.Id)
+                            {
+                                <span class="badge">Active</span>
+                            }
+                            else
+                            {
+                                <button class="btn btn-secondary btn-sm" @onclick="() => SetActive(g.Id)">Make active</button>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <h3>Create a group</h3>
+            <div class="field"><label>Name</label><input @bind="_newName" style="width:100%;" /></div>
+            <button class="btn" disabled="@_busy" @onclick="CreateAsync">Create</button>
+        </div>
+        <div class="card">
+            <h3>Join a group</h3>
+            <div class="field"><label>Invite code</label><input @bind="_joinCode" style="width:100%;" /></div>
+            <button class="btn" disabled="@_busy" @onclick="JoinAsync">Join</button>
+        </div>
+        @if (_message is not null) { <p class="@(_isError ? "error" : "success")">@_message</p> }
+    </div>
+</div>
+
+@code {
+    private List<GroupDto> _groups = new();
+    private bool _loading = true, _busy;
+    private string _newName = "", _joinCode = "";
+    private string? _message;
+    private bool _isError;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _groups = await Api.GetGroupsAsync() ?? new();
+        AppState.SetGroups(_groups);
+        _loading = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName)) return;
+        await RunAsync(async () =>
+        {
+            var g = await Api.CreateGroupAsync(new CreateGroupRequest(_newName.Trim()));
+            _newName = "";
+            await LoadAsync();
+            AppState.SetActiveGroup(g.Id);
+            _message = $"Created '{g.Name}'."; _isError = false;
+        });
+    }
+
+    private async Task JoinAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_joinCode)) return;
+        await RunAsync(async () =>
+        {
+            var g = await Api.JoinGroupAsync(new JoinGroupRequest(_joinCode.Trim()));
+            _joinCode = "";
+            await LoadAsync();
+            AppState.SetActiveGroup(g.Id);
+            _message = $"Joined '{g.Name}'."; _isError = false;
+        });
+    }
+
+    private void SetActive(Guid id) => AppState.SetActiveGroup(id);
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true; _message = null;
+        try { await action(); }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+        finally { _busy = false; }
+    }
+}

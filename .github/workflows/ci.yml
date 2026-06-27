@@ -34,3 +34,6 @@ jobs:
 
       - name: Build API image
         run: docker build -f docker/Dockerfile -t edge360-api:ci .
+
+      - name: Build Web image
+        run: docker build -f docker/web/Dockerfile -t edge360-web:ci .

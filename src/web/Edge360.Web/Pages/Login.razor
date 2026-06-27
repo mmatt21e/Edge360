@@ -1,0 +1,55 @@
+@page "/login"
+@layout EmptyLayout
+@inject AuthClient AuthClient
+@inject NavigationManager Nav
+
+<PageTitle>Sign in · Edge360</PageTitle>
+
+<div class="auth-wrap">
+    <div class="card auth-card">
+        <div class="brand">Edge<span>360</span></div>
+        <h3>Sign in</h3>
+        <EditForm Model="_model" OnValidSubmit="SubmitAsync">
+            <DataAnnotationsValidator />
+            <div class="field">
+                <label>Email</label>
+                <InputText class="" @bind-Value="_model.Email" type="email" />
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <InputText @bind-Value="_model.Password" type="password" />
+            </div>
+            @if (_error is not null) { <p class="error">@_error</p> }
+            <button class="btn" type="submit" disabled="@_busy" style="width:100%;">
+                @(_busy ? "Signing in…" : "Sign in")
+            </button>
+        </EditForm>
+        <p class="muted" style="margin-top:1rem;">No account? <a href="/register">Create one</a></p>
+    </div>
+</div>
+
+@code {
+    private sealed class Model
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Password { get; set; } = "";
+    }
+
+    private readonly Model _model = new();
+    private bool _busy;
+    private string? _error;
+
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true; _error = null;
+        _error = await AuthClient.LoginAsync(new LoginRequest(_model.Email, _model.Password));
+        _busy = false;
+
+        if (_error is null)
+            Nav.NavigateTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "/dashboard" : ReturnUrl!, forceLoad: false);
+    }
+}

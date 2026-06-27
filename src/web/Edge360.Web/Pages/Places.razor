@@ -1,0 +1,162 @@
+@page "/places"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject AppState AppState
+@inject MapInterop Map
+@implements IAsyncDisposable
+
+<PageTitle>Places · Edge360</PageTitle>
+<h1>Places</h1>
+
+<GroupSelector />
+
+@if (AppState.ActiveGroup is null)
+{
+    <p class="muted">Select a group to manage its places.</p>
+}
+else
+{
+    <div class="grid grid-2">
+        <div>
+            <div class="card" style="padding:0.4rem;">
+                <div id="places-map" class="map map-sm"></div>
+            </div>
+            <div class="card">
+                <h3>Places</h3>
+                @if (_places.Count == 0)
+                {
+                    <p class="muted">No places defined yet.</p>
+                }
+                else
+                {
+                    <table>
+                        <thead><tr><th>Name</th><th>Radius</th><th>Arrivals</th><th>Departures</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var p in _places)
+                            {
+                                <tr>
+                                    <td>@p.Name</td>
+                                    <td>@p.RadiusMeters m</td>
+                                    <td>@(p.NotifyOnArrival ? "on" : "off")</td>
+                                    <td>@(p.NotifyOnDeparture ? "on" : "off")</td>
+                                    <td>
+                                        @if (AppState.CanManagePlaces)
+                                        {
+                                            <button class="btn btn-danger btn-sm" @onclick="() => DeleteAsync(p.Id)">Delete</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        <div>
+            @if (AppState.CanManagePlaces)
+            {
+                <div class="card">
+                    <h3>Add a place</h3>
+                    <p class="muted">Click the map to set the location, or type coordinates.</p>
+                    <div class="field"><label>Name</label><input @bind="_name" style="width:100%;" /></div>
+                    <div class="field"><label>Latitude</label><input @bind="_lat" style="width:100%;" /></div>
+                    <div class="field"><label>Longitude</label><input @bind="_lon" style="width:100%;" /></div>
+                    <div class="field"><label>Radius (meters)</label><input @bind="_radius" type="number" style="width:100%;" /></div>
+                    <button class="btn" disabled="@_busy" @onclick="CreateAsync">Add place</button>
+                </div>
+            }
+            else
+            {
+                <div class="card"><p class="muted">Only Guardians and Admins can manage places.</p></div>
+            }
+            @if (_message is not null) { <p class="@(_isError ? "error" : "success")">@_message</p> }
+        </div>
+    </div>
+}
+
+@code {
+    private const string MapId = "places-map";
+
+    private List<PlaceDto> _places = new();
+    private Guid? _renderedGroupId;
+    private DotNetObjectReference<Places>? _selfRef;
+    private string _name = "";
+    private double _lat = 40.0, _lon = -74.0, _radius = 150;
+    private bool _busy;
+    private string? _message;
+    private bool _isError;
+
+    protected override void OnInitialized() => AppState.OnChange += OnGroupChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var active = AppState.ActiveGroup?.Id;
+        if (active is not null && active != _renderedGroupId)
+        {
+            _renderedGroupId = active;
+            await RefreshAsync(active.Value);
+        }
+    }
+
+    private async Task RefreshAsync(Guid groupId)
+    {
+        try
+        {
+            _places = await Api.GetPlacesAsync(groupId) ?? new();
+            await Map.InitAsync(MapId);
+            await Map.SetPlacesAsync(MapId, _places);
+            _selfRef ??= DotNetObjectReference.Create(this);
+            await Map.OnClickAsync(MapId, _selfRef);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _message = ex is ApiException ? ex.Message : "Could not load places.";
+            _isError = true;
+        }
+    }
+
+    [JSInvokable]
+    public Task OnMapClick(double lat, double lon)
+    {
+        _lat = Math.Round(lat, 6);
+        _lon = Math.Round(lon, 6);
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (AppState.ActiveGroup is null || string.IsNullOrWhiteSpace(_name)) return;
+        _busy = true; _message = null;
+        try
+        {
+            await Api.CreatePlaceAsync(new CreatePlaceRequest(AppState.ActiveGroup.Id, _name.Trim(), _lat, _lon, _radius));
+            _name = "";
+            await RefreshAsync(AppState.ActiveGroup.Id);
+            _message = "Place added."; _isError = false;
+        }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteAsync(Guid placeId)
+    {
+        try
+        {
+            await Api.DeletePlaceAsync(placeId);
+            if (AppState.ActiveGroup is not null) await RefreshAsync(AppState.ActiveGroup.Id);
+        }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+    }
+
+    private void OnGroupChanged() => InvokeAsync(StateHasChanged);
+
+    public async ValueTask DisposeAsync()
+    {
+        AppState.OnChange -= OnGroupChanged;
+        _selfRef?.Dispose();
+        try { await Map.DisposeMapAsync(MapId); } catch { }
+    }
+}

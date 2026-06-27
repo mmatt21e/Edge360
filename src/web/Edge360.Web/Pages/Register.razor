@@ -1,0 +1,59 @@
+@page "/register"
+@layout EmptyLayout
+@inject AuthClient AuthClient
+@inject NavigationManager Nav
+
+<PageTitle>Create account · Edge360</PageTitle>
+
+<div class="auth-wrap">
+    <div class="card auth-card">
+        <div class="brand">Edge<span>360</span></div>
+        <h3>Create account</h3>
+        <EditForm Model="_model" OnValidSubmit="SubmitAsync">
+            <DataAnnotationsValidator />
+            <div class="field">
+                <label>Display name</label>
+                <InputText @bind-Value="_model.DisplayName" />
+            </div>
+            <div class="field">
+                <label>Email</label>
+                <InputText @bind-Value="_model.Email" type="email" />
+            </div>
+            <div class="field">
+                <label>Password (min 8 chars)</label>
+                <InputText @bind-Value="_model.Password" type="password" />
+            </div>
+            @if (_error is not null) { <p class="error">@_error</p> }
+            <button class="btn" type="submit" disabled="@_busy" style="width:100%;">
+                @(_busy ? "Creating…" : "Create account")
+            </button>
+        </EditForm>
+        <p class="muted" style="margin-top:1rem;">Already have an account? <a href="/login">Sign in</a></p>
+    </div>
+</div>
+
+@code {
+    private sealed class Model
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string DisplayName { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MinLength(8)]
+        public string Password { get; set; } = "";
+    }
+
+    private readonly Model _model = new();
+    private bool _busy;
+    private string? _error;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true; _error = null;
+        _error = await AuthClient.RegisterAsync(new RegisterRequest(_model.Email, _model.Password, _model.DisplayName));
+        _busy = false;
+
+        if (_error is null)
+            Nav.NavigateTo("/dashboard", forceLoad: false);
+    }
+}

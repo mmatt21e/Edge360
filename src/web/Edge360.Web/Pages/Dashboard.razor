@@ -1,0 +1,179 @@
+@page "/dashboard"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject AppState AppState
+@inject MapInterop Map
+@inject RealtimeService Realtime
+@implements IAsyncDisposable
+
+<PageTitle>Dashboard · Edge360</PageTitle>
+<h1>Dashboard</h1>
+
+<GroupSelector />
+
+@if (AppState.ActiveGroup is null)
+{
+    <p class="muted">Select a group to see the live map.</p>
+}
+else
+{
+    <div class="grid grid-2">
+        <div>
+            <div class="card" style="padding:0.4rem;">
+                <div id="dashboard-map" class="map"></div>
+            </div>
+        </div>
+        <div>
+            <div class="card">
+                <div class="row">
+                    <h3 style="margin:0;">Members</h3>
+                    <span class="spacer"></span>
+                    <span class="badge">@(Realtime.IsConnected ? "live" : "offline")</span>
+                </div>
+                <ul class="list">
+                    @foreach (var m in _members)
+                    {
+                        <li>
+                            <strong>@m.DisplayName</strong><br />
+                            <span class="muted">@m.Latitude.ToString("F4"), @m.Longitude.ToString("F4") · @Ago(m.RecordedAt)</span>
+                        </li>
+                    }
+                    @if (_members.Count == 0) { <li class="muted">No recent locations.</li> }
+                </ul>
+            </div>
+
+            <div class="card">
+                <div class="row">
+                    <h3 style="margin:0;">Activity</h3>
+                    <span class="spacer"></span>
+                    <button class="btn btn-danger btn-sm" @onclick="RaiseSos">🆘 SOS</button>
+                </div>
+                <ul class="list">
+                    @foreach (var e in _events)
+                    {
+                        <li>
+                            <span class="badge @SeverityClass(e.Severity)">@e.Type</span>
+                            @e.Message<br />
+                            <span class="muted">@Ago(e.OccurredAt)</span>
+                        </li>
+                    }
+                    @if (_events.Count == 0) { <li class="muted">No activity yet.</li> }
+                </ul>
+            </div>
+            @if (_message is not null) { <p class="@(_isError ? "error" : "success")">@_message</p> }
+        </div>
+    </div>
+}
+
+@code {
+    private const string MapId = "dashboard-map";
+
+    private List<LocationDto> _members = new();
+    private List<EventDto> _events = new();
+    private HashSet<Guid> _memberIds = new();
+    private Guid? _renderedGroupId;
+    private string? _message;
+    private bool _isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AppState.OnChange += OnGroupChanged;
+        Realtime.LocationUpdated += OnLocation;
+        Realtime.EventRaised += OnEvent;
+        try { await Realtime.StartAsync(); } catch { /* hubs optional; UI still works */ }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var active = AppState.ActiveGroup?.Id;
+        if (active is not null && active != _renderedGroupId)
+        {
+            _renderedGroupId = active;
+            await RefreshAsync(active.Value);
+        }
+    }
+
+    private async Task RefreshAsync(Guid groupId)
+    {
+        try
+        {
+            var members = await Api.GetMembersAsync(groupId) ?? new();
+            _memberIds = members.Select(m => m.UserId).ToHashSet();
+            _members = await Api.GetLatestAsync(groupId) ?? new();
+            var events = await Api.GetEventsAsync(groupId);
+            _events = events?.Items.ToList() ?? new();
+            var places = await Api.GetPlacesAsync(groupId) ?? new();
+
+            await Map.InitAsync(MapId);
+            await Map.SetMembersAsync(MapId, _members);
+            await Map.SetPlacesAsync(MapId, places);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _message = ex is ApiException ? ex.Message : "Could not load the map data.";
+            _isError = true;
+        }
+    }
+
+    private void OnGroupChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnLocation(LocationDto loc)
+    {
+        if (!_memberIds.Contains(loc.UserId)) return;
+        InvokeAsync(async () =>
+        {
+            var idx = _members.FindIndex(m => m.UserId == loc.UserId);
+            if (idx >= 0) _members[idx] = loc; else _members.Add(loc);
+            try { await Map.UpsertMemberAsync(MapId, loc); } catch { }
+            StateHasChanged();
+        });
+    }
+
+    private void OnEvent(EventDto evt)
+    {
+        if (evt.GroupId != AppState.ActiveGroup?.Id) return;
+        InvokeAsync(() =>
+        {
+            _events.Insert(0, evt);
+            if (_events.Count > 50) _events.RemoveAt(_events.Count - 1);
+            StateHasChanged();
+        });
+    }
+
+    private async Task RaiseSos()
+    {
+        if (AppState.ActiveGroup is null) return;
+        _message = null;
+        try
+        {
+            await Api.RaiseSosAsync(new SosRequest(AppState.ActiveGroup.Id, Message: "SOS triggered from the dashboard."));
+            _message = "SOS sent to your group."; _isError = false;
+        }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+    }
+
+    private static string SeverityClass(string severity) => severity switch
+    {
+        "Critical" => "crit",
+        "Warning" => "warn",
+        _ => ""
+    };
+
+    private static string Ago(DateTimeOffset when)
+    {
+        var d = DateTimeOffset.UtcNow - when;
+        if (d.TotalSeconds < 60) return "just now";
+        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
+        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
+        return when.ToString("MMM d, HH:mm");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        AppState.OnChange -= OnGroupChanged;
+        Realtime.LocationUpdated -= OnLocation;
+        Realtime.EventRaised -= OnEvent;
+        try { await Map.DisposeMapAsync(MapId); } catch { }
+    }
+}

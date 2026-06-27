@@ -1,0 +1,204 @@
+@page "/driving"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject AppState AppState
+@inject MapInterop Map
+@inject TokenStore Tokens
+@implements IAsyncDisposable
+
+<PageTitle>Driving · Edge360</PageTitle>
+<h1>Driving</h1>
+
+<GroupSelector />
+
+@if (AppState.ActiveGroup is null)
+{
+    <p class="muted">Select a group to view driving insights.</p>
+}
+else
+{
+    <div class="group-bar">
+        <label style="margin:0;">Member</label>
+        <select value="@_subjectId" @onchange="OnSubjectChanged">
+            @foreach (var m in _members)
+            {
+                <option value="@m.UserId">@m.DisplayName @(m.UserId == _selfId ? "(you)" : "")</option>
+            }
+        </select>
+        @if (_subjectId == _selfId)
+        {
+            <button class="btn btn-secondary btn-sm" disabled="@_analyzing" @onclick="AnalyzeAsync">
+                @(_analyzing ? "Analyzing…" : "Analyze my driving")
+            </button>
+        }
+    </div>
+
+    <div class="grid grid-2">
+        <div>
+            <div class="card">
+                <h3>Trips</h3>
+                @if (_trips.Count == 0)
+                {
+                    <p class="muted">No trips yet. @(_subjectId == _selfId ? "Post some locations, then analyze." : "")</p>
+                }
+                else
+                {
+                    <table>
+                        <thead><tr><th>Start</th><th>Distance</th><th>Max speed</th><th>Score</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var t in _trips)
+                            {
+                                <tr>
+                                    <td>@t.StartedAt.ToString("MMM d, HH:mm")</td>
+                                    <td>@((t.DistanceMeters / 1000).ToString("F1")) km</td>
+                                    <td>@((t.MaxSpeedMps * 3.6).ToString("F0")) km/h</td>
+                                    <td><span class="@ScoreClass(t.Score)">@t.Score</span></td>
+                                    <td><button class="btn btn-secondary btn-sm" @onclick="() => ViewTripAsync(t.Id)">Route</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            @if (_selectedTrip is not null)
+            {
+                <div class="card" style="padding:0.4rem;">
+                    <div id="driving-map" class="map map-sm"></div>
+                </div>
+                <div class="card">
+                    <h3>Trip events</h3>
+                    <ul class="list">
+                        @foreach (var e in _selectedTrip.Events)
+                        {
+                            <li><span class="badge warn">@e.Type</span> <span class="muted">@e.OccurredAt.ToString("HH:mm:ss") · magnitude @e.Magnitude.ToString("F1")</span></li>
+                        }
+                        @if (_selectedTrip.Events.Count == 0) { <li class="muted">No harsh events — clean trip.</li> }
+                    </ul>
+                </div>
+            }
+        </div>
+
+        <div>
+            <div class="card">
+                <h3>Score summary</h3>
+                @if (_score is null)
+                {
+                    <p class="muted">Loading…</p>
+                }
+                else
+                {
+                    <div class="score @ScoreWord(_score.AverageScore)">@_score.AverageScore</div>
+                    <p class="muted">@_score.TripCount trips · @((_score.TotalDistanceMeters / 1000).ToString("F1")) km total</p>
+                    <ul class="list">
+                        <li>Hard braking <span class="badge">@_score.HardBrakingCount</span></li>
+                        <li>Hard acceleration <span class="badge">@_score.HardAccelerationCount</span></li>
+                        <li>Harsh cornering <span class="badge">@_score.HarshCorneringCount</span></li>
+                        <li>Speeding <span class="badge">@_score.SpeedingCount</span></li>
+                    </ul>
+                }
+            </div>
+            @if (_message is not null) { <p class="@(_isError ? "error" : "success")">@_message</p> }
+        </div>
+    </div>
+}
+
+@code {
+    private const string MapId = "driving-map";
+
+    private List<GroupMemberDto> _members = new();
+    private List<TripDto> _trips = new();
+    private DrivingScoreDto? _score;
+    private TripDetailDto? _selectedTrip;
+    private Guid _selfId;
+    private Guid _subjectId;
+    private Guid? _loadedGroupId;
+    private bool _analyzing, _routePending;
+    private string? _message;
+    private bool _isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AppState.OnChange += OnGroupChanged;
+        var user = await Tokens.GetUserAsync();
+        if (user is not null) { _selfId = user.Id; _subjectId = user.Id; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var active = AppState.ActiveGroup?.Id;
+        if (active is not null && active != _loadedGroupId)
+        {
+            _loadedGroupId = active;
+            await LoadGroupAsync(active.Value);
+        }
+
+        if (_routePending && _selectedTrip is not null)
+        {
+            _routePending = false;
+            try { await Map.InitAsync(MapId); await Map.DrawRouteAsync(MapId, _selectedTrip.Route); } catch { }
+        }
+    }
+
+    private async Task LoadGroupAsync(Guid groupId)
+    {
+        _members = await Api.GetMembersAsync(groupId) ?? new();
+        if (_members.All(m => m.UserId != _subjectId))
+            _subjectId = _selfId != Guid.Empty ? _selfId : (_members.FirstOrDefault()?.UserId ?? Guid.Empty);
+        await LoadSubjectAsync();
+    }
+
+    private async Task LoadSubjectAsync()
+    {
+        _selectedTrip = null;
+        try
+        {
+            var subject = _subjectId == _selfId ? (Guid?)null : _subjectId;
+            var trips = await Api.GetTripsAsync(subject);
+            _trips = trips?.Items.ToList() ?? new();
+            _score = await Api.GetScoreAsync(subject);
+        }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+        StateHasChanged();
+    }
+
+    private async Task OnSubjectChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id)) { _subjectId = id; await LoadSubjectAsync(); }
+    }
+
+    private async Task AnalyzeAsync()
+    {
+        _analyzing = true; _message = null;
+        try
+        {
+            var count = await Api.AnalyzeDrivingAsync();
+            await LoadSubjectAsync();
+            _message = $"Analyzed: {count} trip(s) found."; _isError = false;
+        }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+        finally { _analyzing = false; }
+    }
+
+    private async Task ViewTripAsync(Guid tripId)
+    {
+        try
+        {
+            _selectedTrip = await Api.GetTripAsync(tripId);
+            _routePending = true;
+            StateHasChanged();
+        }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+    }
+
+    private void OnGroupChanged() => InvokeAsync(StateHasChanged);
+
+    private static string ScoreClass(int s) => $"badge";
+    private static string ScoreWord(int s) => s >= 85 ? "good" : s >= 65 ? "mid" : "bad";
+
+    public async ValueTask DisposeAsync()
+    {
+        AppState.OnChange -= OnGroupChanged;
+        try { await Map.DisposeMapAsync(MapId); } catch { }
+    }
+}
