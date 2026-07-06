@@ -37,3 +37,21 @@ public record DrivingScoreDto(Guid UserId, int TripCount, double TotalDistanceMe
     int HardBrakingCount, int HardAccelerationCount, int HarshCorneringCount, int SpeedingCount);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);
+
+// Admin
+public record AdminUserDto(Guid Id, string Email, string DisplayName, string SystemRole, bool IsActive,
+    int GroupCount, int DeviceCount, DateTimeOffset? LastLoginAt, DateTimeOffset CreatedAt);
+public record SetRoleRequest(string SystemRole);
+public record SetActiveRequest(bool IsActive);
+public record AdminGroupDto(Guid Id, string Name, string InviteCode, int MemberCount, int PlaceCount,
+    Guid CreatedByUserId, DateTimeOffset CreatedAt);
+public record AuditLogDto(Guid Id, Guid? ActorUserId, string Action, string? TargetType, string? TargetId,
+    string? IpAddress, DateTimeOffset CreatedAt);
+public record SystemStatsDto(int UserCount, int ActiveUserCount, int GroupCount, int DeviceCount,
+    long LocationPointCount, long EventsLast24h, long TripCount);
+public record RetentionPolicyDto(int LocationRetentionDays, int EventRetentionDays, int AuditRetentionDays, bool Enabled);
+public record RetentionResultDto(int LocationPointsDeleted, int EventsDeleted, int AuditLogsDeleted);
+
+// Notifications
+public record AlertDto(Guid Id, Guid EventId, string EventType, string Severity, string Message,
+    string Channel, bool Delivered, string? FailureReason, DateTimeOffset OccurredAt);

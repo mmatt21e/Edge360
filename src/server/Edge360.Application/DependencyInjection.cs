@@ -1,3 +1,4 @@
+using Edge360.Application.Admin;
 using Edge360.Application.Auth;
 using Edge360.Application.Common;
 using Edge360.Application.Driving;
@@ -32,6 +33,10 @@ public static class DependencyInjection
         // Notifications. Channels are registered by the infrastructure layer.
         services.AddSingleton(sp => sp.GetService<IOptions<NotificationOptions>>()?.Value ?? new NotificationOptions());
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+
+        // Administration + retention.
+        services.AddSingleton(sp => sp.GetService<IOptions<RetentionOptions>>()?.Value ?? new RetentionOptions());
+        services.AddScoped<AdminService>();
 
         services.AddValidatorsFromAssemblyContaining<AuthService>(ServiceLifetime.Scoped);
 

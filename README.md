@@ -6,9 +6,9 @@ historical tracking. This repository currently contains the **production-grade b
 foundation** — the API spine that the web dashboard and mobile apps build on.
 
 > Status: Backend complete (auth, groups, location, geofencing + events, SOS, real-time,
-> driving intelligence, **multi-channel notifications**) plus a Blazor WebAssembly web dashboard
-> (live map, members, activity feed, SOS, places, driving). Docker, CI, tests included. Mobile
-> apps are on the roadmap below.
+> driving intelligence, multi-channel notifications, **admin console + data retention**) plus a
+> Blazor WebAssembly web dashboard (live map, members, activity feed, SOS, places, driving, admin).
+> Docker, CI, tests included. Mobile apps are the remaining roadmap item.
 
 ## Tech stack
 
@@ -97,8 +97,8 @@ export Jwt__SigningKey="a-long-random-secret-at-least-32-characters"
 dotnet test Edge360.sln
 ```
 
-57 tests covering domain logic, application services (incl. the driving analyzer and
-notification dispatcher), and end-to-end HTTP flows.
+67 tests covering domain logic, application services (incl. the driving analyzer, notification
+dispatcher, and admin service), and end-to-end HTTP flows.
 
 ## Database migrations
 
@@ -145,6 +145,16 @@ dotnet run --project src/web/Edge360.Web   # serves the SPA; configure API URL i
 The map library is vendored under `wwwroot/lib/leaflet` (no CDN dependency); map tiles default to
 OpenStreetMap and can be pointed at a self-hosted tile server.
 
+## Admin console
+
+Platform administrators (`SystemRole.Administrator`) get an oversight surface at `/api/admin/*`
+and a role-gated **Admin** page in the web app: system stats, **user management** (promote/demote,
+activate/deactivate), **group oversight**, an **audit-log** browser, and **data-retention** policy
+with an on-demand purge (a background job runs it on a schedule when `Retention:Enabled` is true).
+
+Bootstrap the first admin without touching the database via the `AdminSeed` config section
+(`AdminSeed:Email` / `AdminSeed:Password`) — an admin is created on startup if it doesn't exist.
+
 ## Notifications
 
 Safety events fan out to recipients across pluggable channels. Triggers: **SOS** (all members),
@@ -174,7 +184,6 @@ section. See [docs/API.md](docs/API.md#driving-intelligence-auth-required).
 ## Roadmap (not yet implemented)
 
 - .NET MAUI mobile apps (Android/iOS) with battery-aware background tracking
-- Admin console (user/group oversight, retention policy, audit browser)
 - Redis SignalR backplane for horizontal scale
 - Admin console (user/group oversight, retention policy, audit browser)
 

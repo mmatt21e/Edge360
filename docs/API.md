@@ -109,6 +109,33 @@ Omit `subjectUserId` for your own trips; supply it to view a member who shares a
 `drivingEventDto`: `{ id, type, occurredAt, latitude, longitude, magnitude }`
 `type` ∈ { HardBraking, HardAcceleration, HarshCornering, Speeding }. Score is 0–100 (100 = flawless).
 
+## Admin  *(auth required — `Administrator` system role; others get 403)*
+
+### GET /api/admin/stats
+→ `200 { userCount, activeUserCount, groupCount, deviceCount, locationPointCount, eventsLast24h, tripCount }`
+
+### GET /api/admin/users?search=&page=1&pageSize=50
+→ `200 { items: [ adminUserDto ], ... }`. `adminUserDto`:
+`{ id, email, displayName, systemRole, isActive, groupCount, deviceCount, lastLoginAt, createdAt }`
+
+### POST /api/admin/users/{userId}/role
+Body: `{ "systemRole": "User" | "Administrator" }` → `200` adminUserDto.
+
+### POST /api/admin/users/{userId}/active
+Body: `{ "isActive": true|false }` → `200` adminUserDto.
+
+### GET /api/admin/groups?page=1&pageSize=50
+→ `200 { items: [ { id, name, inviteCode, memberCount, placeCount, createdByUserId, createdAt } ], ... }`
+
+### GET /api/admin/audit?action=&page=1&pageSize=50
+→ `200 { items: [ { id, actorUserId, action, targetType, targetId, ipAddress, createdAt } ], ... }`
+
+### GET /api/admin/retention
+→ `200 { locationRetentionDays, eventRetentionDays, auditRetentionDays, enabled }`
+
+### POST /api/admin/retention/run
+→ `200 { locationPointsDeleted, eventsDeleted, auditLogsDeleted }` — purges data past the windows.
+
 ## Real-time (SignalR)
 
 Connect with the access token via query string (`?access_token=...`):

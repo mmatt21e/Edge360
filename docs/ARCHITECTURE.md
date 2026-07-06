@@ -57,6 +57,14 @@ Dependencies point inward; the Domain has no outward dependencies.
   and offline-device — the `OfflineDeviceMonitor` `BackgroundService` flags devices unseen past a
   window (one-shot via `Device.OfflineNotified`, reset when the device reports again).
 
+### Administration & retention
+- `AdminService` (Application) powers the `/api/admin/*` surface — gated by `[Authorize(Roles =
+  "Administrator")]` at the controller. It manages users (role/active), lists groups and audit
+  logs, computes system stats, and runs data retention (bulk `ExecuteDelete` past configurable
+  windows). A `RetentionService` `BackgroundService` runs the purge on a schedule when enabled.
+- The first administrator can be bootstrapped from the `AdminSeed` config section at startup
+  (`AdminSeeder`), so a fresh deployment never needs manual DB edits.
+
 ### Authentication
 - Passwords hashed with PBKDF2 (HMAC-SHA256, 100k iterations), stored as `iter.salt.hash`.
 - Login/refresh issue a short-lived JWT plus an opaque refresh token (stored **hashed**).

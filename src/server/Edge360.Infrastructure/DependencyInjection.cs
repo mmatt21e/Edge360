@@ -24,6 +24,8 @@ public static class DependencyInjection
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<Application.Driving.DrivingThresholds>(
             configuration.GetSection(Application.Driving.DrivingThresholds.SectionName));
+        services.Configure<Application.Admin.RetentionOptions>(
+            configuration.GetSection(Application.Admin.RetentionOptions.SectionName));
 
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();

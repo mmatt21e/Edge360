@@ -10,6 +10,9 @@
     <NavLink class="nav-link" href="groups"><span>👪</span> Groups</NavLink>
     <NavLink class="nav-link" href="places"><span>📍</span> Places</NavLink>
     <NavLink class="nav-link" href="driving"><span>🚗</span> Driving</NavLink>
+    <AuthorizeView Roles="Administrator">
+        <NavLink class="nav-link" href="admin"><span>🛠️</span> Admin</NavLink>
+    </AuthorizeView>
 
     <div class="sidebar-footer">
         @if (AppState.ActiveGroup is not null)

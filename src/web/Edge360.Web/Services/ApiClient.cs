@@ -77,6 +77,41 @@ public sealed class ApiClient
         return _http.GetFromJsonAsync<DrivingScoreDto>($"/api/driving/score{q}");
     }
 
+    // Notifications
+    public Task<PagedResult<AlertDto>?> GetNotificationsAsync(int page = 1, int pageSize = 50) =>
+        _http.GetFromJsonAsync<PagedResult<AlertDto>>($"/api/notifications?page={page}&pageSize={pageSize}");
+
+    // Admin
+    public Task<SystemStatsDto?> GetStatsAsync() =>
+        _http.GetFromJsonAsync<SystemStatsDto>("/api/admin/stats");
+
+    public Task<PagedResult<AdminUserDto>?> GetAdminUsersAsync(string? search = null, int page = 1, int pageSize = 50)
+    {
+        var q = $"?page={page}&pageSize={pageSize}" + (string.IsNullOrWhiteSpace(search) ? "" : $"&search={Uri.EscapeDataString(search)}");
+        return _http.GetFromJsonAsync<PagedResult<AdminUserDto>>($"/api/admin/users{q}");
+    }
+
+    public Task<AdminUserDto> SetUserRoleAsync(Guid userId, string role) =>
+        PostAsync<AdminUserDto>($"/api/admin/users/{userId}/role", new SetRoleRequest(role));
+
+    public Task<AdminUserDto> SetUserActiveAsync(Guid userId, bool isActive) =>
+        PostAsync<AdminUserDto>($"/api/admin/users/{userId}/active", new SetActiveRequest(isActive));
+
+    public Task<PagedResult<AdminGroupDto>?> GetAdminGroupsAsync(int page = 1, int pageSize = 50) =>
+        _http.GetFromJsonAsync<PagedResult<AdminGroupDto>>($"/api/admin/groups?page={page}&pageSize={pageSize}");
+
+    public Task<PagedResult<AuditLogDto>?> GetAuditAsync(string? action = null, int page = 1, int pageSize = 50)
+    {
+        var q = $"?page={page}&pageSize={pageSize}" + (string.IsNullOrWhiteSpace(action) ? "" : $"&action={Uri.EscapeDataString(action)}");
+        return _http.GetFromJsonAsync<PagedResult<AuditLogDto>>($"/api/admin/audit{q}");
+    }
+
+    public Task<RetentionPolicyDto?> GetRetentionAsync() =>
+        _http.GetFromJsonAsync<RetentionPolicyDto>("/api/admin/retention");
+
+    public Task<RetentionResultDto> RunRetentionAsync() =>
+        PostAsync<RetentionResultDto>("/api/admin/retention/run", new { });
+
     private async Task<T> PostAsync<T>(string url, object body)
     {
         var resp = await _http.PostAsJsonAsync(url, body);

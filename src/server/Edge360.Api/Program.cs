@@ -75,9 +75,16 @@ builder.Services.AddControllers(options => options.Filters.Add<ValidationFilter>
 builder.Services.AddSignalR();
 
 // --- Background jobs ---
-// The offline-device monitor scans the DB on a timer; skip it under integration tests.
+// Timer-based DB scans; skip under integration tests.
 if (!builder.Environment.IsEnvironment("Testing"))
+{
     builder.Services.AddHostedService<Edge360.Api.Notifications.OfflineDeviceMonitor>();
+
+    var retention = builder.Configuration.GetSection(Edge360.Application.Admin.RetentionOptions.SectionName)
+        .Get<Edge360.Application.Admin.RetentionOptions>() ?? new Edge360.Application.Admin.RetentionOptions();
+    if (retention.Enabled)
+        builder.Services.AddHostedService<Edge360.Api.Notifications.RetentionService>();
+}
 
 // --- Health checks ---
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
@@ -129,12 +136,13 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Apply migrations automatically outside of the test environment.
+// Apply migrations and optionally seed an administrator, outside of the test environment.
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+    await Edge360.Api.Setup.AdminSeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
 }
 
 app.UseSerilogRequestLogging();

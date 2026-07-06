@@ -1,0 +1,154 @@
+@page "/admin"
+@attribute [Authorize(Roles = "Administrator")]
+@inject ApiClient Api
+
+<PageTitle>Admin · Edge360</PageTitle>
+<h1>Admin console</h1>
+
+@if (_message is not null) { <p class="@(_isError ? "error" : "success")">@_message</p> }
+
+@if (_stats is not null)
+{
+    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
+        <div class="card"><div class="muted">Users</div><div class="score good">@_stats.UserCount</div><div class="muted">@_stats.ActiveUserCount active</div></div>
+        <div class="card"><div class="muted">Groups</div><div class="score good">@_stats.GroupCount</div></div>
+        <div class="card"><div class="muted">Devices</div><div class="score good">@_stats.DeviceCount</div></div>
+        <div class="card"><div class="muted">Locations</div><div class="score good">@_stats.LocationPointCount</div></div>
+        <div class="card"><div class="muted">Events (24h)</div><div class="score good">@_stats.EventsLast24h</div></div>
+        <div class="card"><div class="muted">Trips</div><div class="score good">@_stats.TripCount</div></div>
+    </div>
+}
+
+<div class="card">
+    <div class="row">
+        <h3 style="margin:0;">Users</h3>
+        <span class="spacer"></span>
+        <input placeholder="Search…" @bind="_search" @bind:event="oninput" style="width:200px;" />
+        <button class="btn btn-secondary btn-sm" @onclick="LoadUsers">Search</button>
+    </div>
+    <table>
+        <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Active</th><th>Groups</th><th>Actions</th></tr></thead>
+        <tbody>
+            @foreach (var u in _users)
+            {
+                <tr>
+                    <td>@u.Email</td>
+                    <td>@u.DisplayName</td>
+                    <td><span class="badge">@u.SystemRole</span></td>
+                    <td>@(u.IsActive ? "yes" : "no")</td>
+                    <td>@u.GroupCount</td>
+                    <td class="row">
+                        @if (u.SystemRole == "Administrator")
+                        {
+                            <button class="btn btn-secondary btn-sm" @onclick='() => SetRole(u.Id, "User")'>Demote</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-secondary btn-sm" @onclick='() => SetRole(u.Id, "Administrator")'>Make admin</button>
+                        }
+                        <button class="btn @(u.IsActive ? "btn-danger" : "btn-secondary") btn-sm" @onclick="() => SetActive(u.Id, !u.IsActive)">
+                            @(u.IsActive ? "Deactivate" : "Activate")
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <h3>Groups</h3>
+        <table>
+            <thead><tr><th>Name</th><th>Members</th><th>Places</th><th>Created</th></tr></thead>
+            <tbody>
+                @foreach (var g in _groups)
+                {
+                    <tr><td>@g.Name</td><td>@g.MemberCount</td><td>@g.PlaceCount</td><td>@g.CreatedAt.ToString("MMM d, yyyy")</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3>Data retention</h3>
+        @if (_retention is not null)
+        {
+            <ul class="list">
+                <li>Locations kept <span class="badge">@_retention.LocationRetentionDays days</span></li>
+                <li>Events kept <span class="badge">@_retention.EventRetentionDays days</span></li>
+                <li>Audit kept <span class="badge">@_retention.AuditRetentionDays days</span></li>
+                <li>Scheduled purge <span class="badge">@(_retention.Enabled ? "on" : "off")</span></li>
+            </ul>
+        }
+        <button class="btn" disabled="@_purging" @onclick="RunRetention">@(_purging ? "Purging…" : "Run retention now")</button>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Audit log</h3>
+    <table>
+        <thead><tr><th>When</th><th>Action</th><th>Actor</th><th>Target</th><th>IP</th></tr></thead>
+        <tbody>
+            @foreach (var a in _audit)
+            {
+                <tr>
+                    <td>@a.CreatedAt.ToString("MMM d, HH:mm:ss")</td>
+                    <td><span class="badge">@a.Action</span></td>
+                    <td class="muted">@(a.ActorUserId?.ToString()[..8] ?? "—")</td>
+                    <td class="muted">@a.TargetType @(a.TargetId is null ? "" : a.TargetId[..Math.Min(8, a.TargetId.Length)])</td>
+                    <td class="muted">@a.IpAddress</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private SystemStatsDto? _stats;
+    private List<AdminUserDto> _users = new();
+    private List<AdminGroupDto> _groups = new();
+    private List<AuditLogDto> _audit = new();
+    private RetentionPolicyDto? _retention;
+    private string _search = "";
+    private bool _purging;
+    private string? _message;
+    private bool _isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadStats(), LoadUsers(), LoadGroups(), LoadAudit(), LoadRetention());
+    }
+
+    private async Task LoadStats() => _stats = await Api.GetStatsAsync();
+    private async Task LoadUsers() { _users = (await Api.GetAdminUsersAsync(_search))?.Items.ToList() ?? new(); StateHasChanged(); }
+    private async Task LoadGroups() => _groups = (await Api.GetAdminGroupsAsync())?.Items.ToList() ?? new();
+    private async Task LoadAudit() => _audit = (await Api.GetAuditAsync())?.Items.ToList() ?? new();
+    private async Task LoadRetention() => _retention = await Api.GetRetentionAsync();
+
+    private async Task SetRole(Guid userId, string role)
+    {
+        try { await Api.SetUserRoleAsync(userId, role); await LoadUsers(); _message = "Role updated."; _isError = false; }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+    }
+
+    private async Task SetActive(Guid userId, bool active)
+    {
+        try { await Api.SetUserActiveAsync(userId, active); await LoadUsers(); }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+    }
+
+    private async Task RunRetention()
+    {
+        _purging = true; _message = null;
+        try
+        {
+            var r = await Api.RunRetentionAsync();
+            _message = $"Purged {r.LocationPointsDeleted} locations, {r.EventsDeleted} events, {r.AuditLogsDeleted} audit logs.";
+            _isError = false;
+            await LoadStats();
+        }
+        catch (ApiException ex) { _message = ex.Message; _isError = true; }
+        finally { _purging = false; }
+    }
+}
